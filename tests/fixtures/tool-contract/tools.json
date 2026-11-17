@@ -3,6 +3,81 @@
     "_meta": {
       "fastmcp": {
         "tags": [
+          "inbox",
+          "labels"
+        ]
+      }
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Tag a conversation with local labels (e.g. \"lead\", \"recruiter\", \"follow up\").\n\nLabels are stored on this machine only; LinkedIn never sees them. They\nare case-insensitive and stored in lowercase. Adding an existing label\nchanges nothing.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "description": "One or more labels, up to 50 characters each.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "linkedin_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The participant's username, if there is no thread ID."
+        },
+        "participant": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional display name, shown when listing a label."
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conversation's thread ID. Preferred."
+        }
+      },
+      "required": [
+        "labels"
+      ],
+      "type": "object"
+    },
+    "name": "add_labels",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "Add Labels"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
           "actions",
           "messaging"
         ]
@@ -58,6 +133,51 @@
       "type": "object"
     },
     "title": "Close Session"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "inbox",
+          "reminders"
+        ]
+      }
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Close a reminder as done or cancelled.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "reminder_id": {
+          "description": "The reminder's id from set_reminder or list_reminders.",
+          "type": "integer"
+        },
+        "status": {
+          "default": "done",
+          "description": "\"done\" (default) or \"cancelled\".",
+          "enum": [
+            "done",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "reminder_id"
+      ],
+      "type": "object"
+    },
+    "name": "complete_reminder",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "Complete Reminder"
   },
   {
     "_meta": {
@@ -716,45 +836,311 @@
     "_meta": {
       "fastmcp": {
         "tags": [
-          "actions",
-          "messaging"
+          "drafts",
+          "inbox"
         ]
       }
     },
     "annotations": {
-      "destructiveHint": true,
-      "openWorldHint": true
+      "openWorldHint": false,
+      "readOnlyHint": true
     },
-    "description": "Reply inside an existing LinkedIn messaging thread, InMail included.\n\nOpens /messaging/thread/<thread_id>/ and types into that thread's own\nreply composer, so the message lands in the same conversation. This is\nthe path for answering a recruiter InMail, whose sender may have no\nMessage action on their profile. Get the thread_id from get_inbox,\nsearch_conversations or get_conversation.\n\nThe thread is verified before anything is typed: the page must land on\nexactly the requested thread and stay there, and the composer must be\nthe page's one visible editor, inside the thread's main region, with\none submit button in its own form. Any doubt fails closed. Quick-reply\nbuttons an InMail shows (\"Yes, interested...\", \"No thanks...\") are\nnever clicked; a thread that offers only those has no composer and\nreturns composer_unavailable. A draft already in the composer is left\nuntouched and returns composer_occupied. A ``status`` of\n``enter_to_send_enabled`` means LinkedIn's \"Press Enter to Send\"\npreference hides the Send button; relay the returned instructions as\nfor send_message. The dry run reports it too. No Voyager or other\nprivate API is used. This is a write operation when confirm_send is\nTrue.",
+    "description": "List locally saved drafts, newest first.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "confirm_send": {
-          "description": "Must be True to send. False is a dry run that verifies\nthe thread and composer, types nothing, and says who the reply\nwould go to.",
-          "type": "boolean"
+        "limit": {
+          "default": 50,
+          "description": "Maximum drafts to return (1-200, default 50).",
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
         },
-        "message": {
-          "description": "Message text, read as send_message reads it: LF, CRLF and\nCR all end a line, empty lines are kept, and the whole message\nis trimmed. Tab, other control characters, DEL, U+0085, U+2028\nand U+2029 are refused.",
+        "linkedin_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only drafts for this person."
+        },
+        "status": {
+          "default": "open",
+          "description": "Which drafts to list (default \"open\"; \"any\" for all).",
+          "enum": [
+            "open",
+            "sent",
+            "discarded",
+            "any"
+          ],
           "type": "string"
         },
         "thread_id": {
-          "description": "LinkedIn messaging thread ID, or a /messaging/thread/<id>/\nreference as another tool returned it",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only drafts for this conversation."
         }
       },
-      "required": [
-        "thread_id",
-        "message",
-        "confirm_send"
-      ],
       "type": "object"
     },
-    "name": "reply_to_conversation",
+    "name": "list_drafts",
     "outputSchema": {
       "additionalProperties": true,
       "type": "object"
     },
-    "title": "Reply to Conversation"
+    "title": "List Drafts"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "inbox",
+          "labels"
+        ]
+      }
+    },
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Read local labels three ways.\n\n- With thread_id or linkedin_username: that conversation's labels.\n- With label: every conversation carrying it, newest first.\n- With nothing: every label in use and how many conversations have it.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A label to look up conversations by."
+        },
+        "linkedin_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A participant to read labels for."
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A conversation to read labels for."
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_labels",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "List Labels"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "inbox",
+          "reminders"
+        ]
+      }
+    },
+    "annotations": {
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List reminders, soonest first.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "due_only": {
+          "default": false,
+          "description": "Only reminders due now or overdue.",
+          "type": "boolean"
+        },
+        "include_closed": {
+          "default": false,
+          "description": "Include done and cancelled reminders too.",
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 50,
+          "description": "Maximum reminders to return (1-200, default 50).",
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_reminders",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "List Reminders"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "inbox",
+          "labels"
+        ]
+      }
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Remove local labels from a conversation. Missing labels are ignored.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "description": "Labels to remove.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "linkedin_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The participant's username, as it was labeled."
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conversation's thread ID, as it was labeled."
+        }
+      },
+      "required": [
+        "labels"
+      ],
+      "type": "object"
+    },
+    "name": "remove_labels",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "Remove Labels"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "drafts",
+          "inbox"
+        ]
+      }
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Save a message draft locally. Nothing is sent to LinkedIn.\n\nThis server cannot send messages. When the user wants to reply or write\nto someone, save the text here and tell them to send it from LinkedIn\nthemselves. Use update_draft with status \"sent\" once they say they have.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "The message text (up to 8000 characters; line breaks kept).",
+          "type": "string"
+        },
+        "linkedin_username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The recipient's /in/ username or profile URL,\nfor someone with no thread yet. Give this or thread_id."
+        },
+        "recipient_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional display name, for listing."
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conversation's thread ID from get_inbox,\nget_conversation or search_conversations. Preferred."
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "save_draft",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "Save Draft"
   },
   {
     "_meta": {
@@ -1102,32 +1488,25 @@
     "_meta": {
       "fastmcp": {
         "tags": [
-          "actions",
-          "messaging"
+          "inbox",
+          "reminders"
         ]
       }
     },
     "annotations": {
-      "destructiveHint": true,
-      "openWorldHint": true
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
     },
-    "description": "Compose and send a new message to a LinkedIn user.\n\nProfile-based targeting opens LinkedIn's compose flow. It is not a safe\nreply path for an existing recruiter/InMail or messaging thread: it may\ncreate a separate DM even after you inspect that thread with\nget_conversation or search_conversations. To answer an existing thread,\nincluding an InMail from someone who is not a connection, use\nreply_to_conversation with the thread's id instead.\n\nThe recipient must be directly messageable from the profile page. If\nLinkedIn does not expose a normal Message action, use connect_with_person\nfirst, then retry send_message only after the connection request is\naccepted. A ``status`` of ``enter_to_send_enabled`` means the account\nhas LinkedIn's \"Press Enter to Send\" preference on, which hides the Send\nbutton; relay the returned instructions to the user, who switches it to\n\"Click Send to send\" before retrying. The dry run (confirm_send False)\nreports it too. Recipient authorization comes from validating one\nrecipient-specific Message action carrying the target URN, then following\nits browser navigation and pinning the exact final route. Visible profile\nlinks or recipient URNs in the composer are optional corroboration; any\ncontradiction fails closed. No Voyager or other private API is used. This\nis a write operation when confirm_send is True.\n\n``thread_id`` is present only on ``sent``: the conversation the\nconfirmed message was observed in, or null when the page stayed on\nthe compose route. ``retry_safe`` stays the authority for whether a\nretry is safe.",
+    "description": "Set a local follow-up reminder on a conversation.\n\nThis server cannot notify anyone on its own. A reminder is found by\ncalling list_reminders (due_only=True for what is due now), so suggest\nthe user ask \"what's due?\" or schedule that check in their client.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
-        "confirm_send": {
-          "description": "Must be True to send the message",
-          "type": "boolean"
+        "due_at": {
+          "description": "When it is due, ISO 8601 with a UTC offset, e.g.\n\"2026-11-20T09:00:00-07:00\". Resolve phrases like \"next\nTuesday\" in the user's time zone before calling.",
+          "type": "string"
         },
         "linkedin_username": {
-          "description": "LinkedIn username of the recipient; a full profile URL is accepted too",
-          "type": "string"
-        },
-        "message": {
-          "description": "Message text. LF, CRLF and CR all end a line; an empty line\nseparates paragraphs and is kept. Whitespace-only lines count as\nempty, and leading and trailing whitespace of the whole message\nis removed, as LinkedIn does when sending. Tab, other control\ncharacters, DEL, U+0085, U+2028 and U+2029 are refused.",
-          "type": "string"
-        },
-        "profile_urn": {
           "anyOf": [
             {
               "type": "string"
@@ -1137,21 +1516,107 @@
             }
           ],
           "default": null,
-          "description": "Optional profile URN (e.g. ACoAAB...) to verify against\nthe URN exposed by the loaded profile before opening its Message\naction. It never bypasses recipient verification. Obtain via\nget_person_profile. Note: inbox may not always show all messages;\nuse search_conversations as a fallback."
+          "description": "The participant's username, if there is no thread ID."
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What to follow up on."
+        },
+        "thread_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The conversation's thread ID. Preferred."
         }
       },
       "required": [
-        "linkedin_username",
-        "message",
-        "confirm_send"
+        "due_at"
       ],
       "type": "object"
     },
-    "name": "send_message",
+    "name": "set_reminder",
     "outputSchema": {
       "additionalProperties": true,
       "type": "object"
     },
-    "title": "Send Message"
+    "title": "Set Reminder"
+  },
+  {
+    "_meta": {
+      "fastmcp": {
+        "tags": [
+          "drafts",
+          "inbox"
+        ]
+      }
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Edit a draft's text, or mark it sent or discarded.\n\nMarking a draft \"sent\" only records that the user sent it from\nLinkedIn; it sends nothing.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "New text, replacing the old."
+        },
+        "draft_id": {
+          "description": "The draft's id from save_draft or list_drafts.",
+          "type": "integer"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "open",
+                "sent",
+                "discarded"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "\"sent\" once the user has sent it, \"discarded\" to drop it,\nor \"open\" to reopen it."
+        }
+      },
+      "required": [
+        "draft_id"
+      ],
+      "type": "object"
+    },
+    "name": "update_draft",
+    "outputSchema": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "title": "Update Draft"
   }
 ]

@@ -3,7 +3,6 @@ import logging
 from typing import Any, Callable, Coroutine, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import anyio
 import pytest
 from fastmcp import FastMCP
 from fastmcp.tools import FunctionTool
@@ -11,7 +10,6 @@ from fastmcp.tools import FunctionTool
 from linkedin_mcp_server.callbacks import MCPContextProgressCallback
 from linkedin_mcp_server.linkedin.contracts import (
     RATE_LIMITED_SECTION_TEXT,
-    SEND_INTERRUPTED_WARNING,
 )
 from linkedin_mcp_server.linkedin.contracts import ExtractedSection
 
@@ -174,18 +172,6 @@ def serve_extractor(monkeypatch: pytest.MonkeyPatch) -> Callable[[Any], AsyncMoc
         ),
         (
             "messaging",
-            "reply_to_conversation",
-            {"thread_id": "/feed/", "message": "Hello", "confirm_send": False},
-            "thread_id is not a LinkedIn id",
-        ),
-        (
-            "messaging",
-            "reply_to_conversation",
-            {"thread_id": "2+abc", "message": "Hello", "confirm_send": False},
-            "thread_id is not a LinkedIn id",
-        ),
-        (
-            "messaging",
             "get_conversation",
             {"linkedin_username": "/feed/"},
             "not a personal profile",
@@ -201,49 +187,6 @@ def serve_extractor(monkeypatch: pytest.MonkeyPatch) -> Callable[[Any], AsyncMoc
             "get_conversation",
             {"linkedin_username": "alice", "thread_id": "/feed/"},
             "thread_id is not a LinkedIn id",
-        ),
-        (
-            "messaging",
-            "send_message",
-            {
-                "linkedin_username": "/feed/",
-                "message": "Hello",
-                "confirm_send": False,
-            },
-            "not a personal profile",
-        ),
-        (
-            "messaging",
-            "send_message",
-            {
-                "linkedin_username": "alice",
-                "profile_urn": "/feed/",
-                "message": "Hello",
-                "confirm_send": False,
-            },
-            "profile_urn is not a LinkedIn id",
-        ),
-        (
-            "messaging",
-            "send_message",
-            {
-                "linkedin_username": "alice",
-                "profile_urn": "urn:li:company:123",
-                "message": "Hello",
-                "confirm_send": False,
-            },
-            "profile_urn is not a LinkedIn id",
-        ),
-        (
-            "messaging",
-            "send_message",
-            {
-                "linkedin_username": "alice",
-                "profile_urn": "urn:li:fsd_profile:",
-                "message": "Hello",
-                "confirm_send": False,
-            },
-            "profile_urn is not a LinkedIn id",
         ),
     ],
 )
@@ -299,16 +242,6 @@ _A_VALID_CALL = [
     ("messaging", "get_conversation", {"linkedin_username": "alice"}),
     ("messaging", "search_conversations", {"keywords": "hello"}),
     ("messaging", "archive_conversation", {"thread_id": "2-abc123"}),
-    (
-        "messaging",
-        "send_message",
-        {"linkedin_username": "alice", "message": "Hello", "confirm_send": False},
-    ),
-    (
-        "messaging",
-        "reply_to_conversation",
-        {"thread_id": "2-abc123", "message": "Hello", "confirm_send": False},
-    ),
     ("feed", "get_feed", {}),
     ("post", "search_posts", {"keywords": "python"}),
 ]
@@ -2075,458 +2008,6 @@ class TestMessagingTools:
         ]
         root.assert_not_awaited()
 
-    async def test_send_message_success(self, mock_context, serve_extractor):
-        expected = {
-            "url": "https://www.linkedin.com/messaging/thread/abc123/",
-            "status": "sent",
-            "message": "Message sent.",
-            "recipient_selected": True,
-            "sent": True,
-        }
-        mock_extractor = _make_mock_extractor(expected)
-
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        serve_extractor(mock_extractor)
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        result = await tool_fn(
-            "https://www.linkedin.com/in/testuser/",
-            "Hello!",
-            True,
-            mock_context,
-        )
-
-        assert result["status"] == "sent"
-        assert result["sent"] is True
-        mock_extractor.send_message.assert_awaited_once_with(
-            "testuser", "Hello!", confirm_send=True, profile_urn=None
-        )
-
-    async def test_send_message_description_explains_connection_handoff(self):
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool = await mcp.get_tool("send_message")
-        assert tool is not None
-        assert tool.description is not None
-        description = " ".join(tool.description.split())
-        assert (
-            "If LinkedIn does not expose a normal Message action, use "
-            "connect_with_person first, then retry send_message only after the "
-            "connection request is accepted."
-        ) in description
-
-    async def test_send_message_schema_explains_lines_and_controls(self):
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool = await mcp.get_tool("send_message")
-        assert tool is not None
-        message_schema = tool.parameters["properties"]["message"]
-        assert " ".join(message_schema["description"].split()) == (
-            "Message text. LF, CRLF and CR all end a line; an empty line "
-            "separates paragraphs and is kept. Whitespace-only lines count as "
-            "empty, and leading and trailing whitespace of the whole message is "
-            "removed, as LinkedIn does when sending. Tab, other control "
-            "characters, DEL, U+0085, U+2028 and U+2029 are refused."
-        )
-
-    @pytest.mark.parametrize("message", ["", "   \t\n"], ids=["empty", "whitespace"])
-    async def test_send_message_refuses_blank_before_a_session(
-        self, mock_context, message
-    ):
-        """A blank message is answered without acquiring a browser session.
-
-        The extractor keeps the same guard, but it only runs once a session
-        exists. Reaching it means `get_ready_extractor` has already had the
-        chance to spend a login attempt and answer with an authentication
-        error, which is not the refusal the caller can act on.
-        """
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        with patch(
-            "linkedin_mcp_server.tools.messaging.get_ready_extractor",
-            new_callable=AsyncMock,
-        ) as ready:
-            result = await tool_fn("testuser", message, True, mock_context)
-
-        ready.assert_not_awaited()
-        assert result["status"] == "invalid_message"
-        assert result["sent"] is False
-        # Nothing was submitted, so calling again cannot deliver twice.
-        assert result["retry_safe"] is True
-        assert result["url"] == "https://www.linkedin.com/in/testuser/"
-
-    _REFUSED_CODEPOINTS = (
-        *(codepoint for codepoint in range(32) if codepoint not in (10, 13)),
-        127,
-        0x85,
-        0x2028,
-        0x2029,
-    )
-
-    @pytest.mark.parametrize(
-        "message",
-        [f"First{chr(codepoint)}Second" for codepoint in _REFUSED_CODEPOINTS],
-        ids=[f"U+{codepoint:04X}" for codepoint in _REFUSED_CODEPOINTS],
-    )
-    async def test_send_message_refuses_controls_before_a_session(
-        self, mock_context, message
-    ):
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        with patch(
-            "linkedin_mcp_server.tools.messaging.get_ready_extractor",
-            new_callable=AsyncMock,
-        ) as ready:
-            result = await tool_fn("testuser", message, True, mock_context)
-
-        ready.assert_not_awaited()
-        assert result["status"] == "invalid_message"
-        assert result["message"] == (
-            "Message must not contain control characters other than line breaks."
-        )
-        assert result["retry_safe"] is True
-
-    async def test_send_message_forwards_line_breaks_unchanged(
-        self, mock_context, serve_extractor
-    ):
-        """The tool refuses but never rewrites; the sender normalizes."""
-        mock_extractor = _make_mock_extractor(
-            {"status": "sent", "sent": True, "retry_safe": False}
-        )
-
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        serve_extractor(mock_extractor)
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        result = await tool_fn("testuser", "First\r\nSecond", True, mock_context)
-
-        assert result["status"] == "sent"
-        mock_extractor.send_message.assert_awaited_once_with(
-            "testuser", "First\r\nSecond", confirm_send=True, profile_urn=None
-        )
-
-    @pytest.mark.parametrize(
-        "username",
-        ["", "me", "https://www.linkedin.com/company/microsoft/"],
-        ids=["empty", "self-alias", "not-a-person"],
-    )
-    async def test_blank_message_with_an_unusable_recipient_is_mapped(
-        self, mock_context, username
-    ):
-        """A recipient the refusal cannot name still reaches the error mapping.
-
-        Building the refusal normalizes the recipient, so a username that
-        cannot become a profile URL raises `InvalidReferenceError` from inside
-        the guard. Raised past `raise_tool_error` it would arrive at the caller
-        as a generic masked error (`mask_error_details=True` in `server.py`),
-        which drops the one sentence that says what to correct.
-        """
-        from fastmcp.exceptions import ToolError
-
-        from linkedin_mcp_server.core.exceptions import InvalidReferenceError
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        with (
-            patch(
-                "linkedin_mcp_server.tools.messaging.get_ready_extractor",
-                new_callable=AsyncMock,
-            ) as ready,
-            pytest.raises(ToolError) as excinfo,
-        ):
-            await tool_fn(username, "", True, mock_context)
-
-        ready.assert_not_awaited()
-        # A ToolError is what `mask_error_details` lets through, so the
-        # correction the message names reaches the caller intact.
-        cause = excinfo.value.__cause__
-        assert isinstance(cause, InvalidReferenceError)
-        assert str(excinfo.value) == str(cause) != ""
-
-    @pytest.mark.parametrize(
-        ("result", "warns"),
-        [
-            ({"status": "sent", "sent": True, "retry_safe": False}, True),
-            ({"status": "send_unconfirmed", "sent": False, "retry_safe": False}, True),
-            ({"status": "composer_occupied", "sent": False, "retry_safe": True}, False),
-        ],
-        ids=["sent", "unconfirmed", "refused"],
-    )
-    async def test_cancelled_completion_notification_warns(
-        self, mock_context, caplog, result, warns
-    ):
-        """The last await can discard an answer that says a message went out.
-
-        `ctx.report_progress` is the final await of the tool. The tool's own
-        deadline no longer reaches it (#889), but a cancellation from outside
-        still raises `CancelledError` past `except Exception` and throws away
-        the result the send already produced. Nothing can hand it back
-        afterwards, and the log line is then the only record.
-
-        Silent where the result says a retry is safe: nothing was submitted,
-        so there is no duplicate delivery to warn about. That is `retry_safe`
-        and not the status, which is why a confirmed send is parametrized
-        here alongside an unconfirmed one.
-        """
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mock_extractor = _make_mock_extractor({})
-        # Only shapes the extractor can actually return. A confirmed send is
-        # the one that most needs the warning and the one an implementation
-        # keyed on `status == "send_unconfirmed"` would silently drop.
-        mock_extractor.send_message = AsyncMock(
-            return_value={
-                "url": "https://www.linkedin.com/messaging/compose/",
-                **result,
-            }
-        )
-        # Only the completion notification is cancelled; the one before the
-        # send has to pass or the send never runs.
-        mock_context.report_progress = AsyncMock(
-            side_effect=[None, asyncio.CancelledError()]
-        )
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-        tool_fn = await get_tool_fn(mcp, "send_message")
-
-        with (
-            patch(
-                "linkedin_mcp_server.tools.messaging.get_ready_extractor",
-                new_callable=AsyncMock,
-                return_value=mock_extractor,
-            ),
-            caplog.at_level(
-                logging.WARNING, logger="linkedin_mcp_server.tools.messaging"
-            ),
-            pytest.raises(asyncio.CancelledError),
-        ):
-            await tool_fn("testuser", "Hello!", True, mock_context)
-
-        mock_extractor.send_message.assert_awaited_once()
-        warnings = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
-        assert (SEND_INTERRUPTED_WARNING in warnings) is warns, warnings
-
-    async def test_send_message_with_profile_urn(self, mock_context, serve_extractor):
-        expected = {
-            "url": "https://www.linkedin.com/messaging/thread/abc123/",
-            "status": "sent",
-            "message": "Message sent.",
-            "recipient_selected": True,
-            "sent": True,
-        }
-        mock_extractor = _make_mock_extractor(expected)
-
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        serve_extractor(mock_extractor)
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        result = await tool_fn(
-            "testuser",
-            "Hello!",
-            True,
-            mock_context,
-            profile_urn=" ACoAAB1IelEB ",
-        )
-
-        assert result["status"] == "sent"
-        mock_extractor.send_message.assert_awaited_once_with(
-            "testuser", "Hello!", confirm_send=True, profile_urn="ACoAAB1IelEB"
-        )
-
-        mock_extractor.send_message.reset_mock()
-        await tool_fn(
-            "testuser",
-            "Hello!",
-            True,
-            mock_context,
-            profile_urn="urn:li:fsd_profile:ACoAAB1IelEB",
-        )
-        mock_extractor.send_message.assert_awaited_once_with(
-            "testuser",
-            "Hello!",
-            confirm_send=True,
-            profile_urn="urn:li:fsd_profile:ACoAAB1IelEB",
-        )
-
-    async def test_send_message_error(self, mock_context, serve_extractor):
-        from fastmcp.exceptions import ToolError
-
-        from linkedin_mcp_server.exceptions import SessionExpiredError
-
-        mock_extractor = MagicMock()
-        mock_extractor.send_message = AsyncMock(side_effect=SessionExpiredError())
-
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        serve_extractor(mock_extractor)
-        tool_fn = await get_tool_fn(mcp, "send_message")
-        with pytest.raises(ToolError, match="Session expired"):
-            await tool_fn(
-                "testuser",
-                "Hello!",
-                True,
-                mock_context,
-            )
-
-    async def test_send_message_description_points_replies_elsewhere(self):
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool = await mcp.get_tool("send_message")
-        assert tool is not None and tool.description is not None
-        description = " ".join(tool.description.split())
-        assert "use reply_to_conversation with the thread's id instead" in description
-        assert "Until a thread-targeted send path is available" not in description
-
-    async def test_reply_to_conversation_forwards_the_thread(
-        self, mock_context, serve_extractor
-    ):
-        expected = {
-            "url": "https://www.linkedin.com/messaging/thread/2-abc/",
-            "status": "sent",
-            "sent": True,
-            "retry_safe": False,
-            "thread_id": "2-abc",
-            "participant": "Ada Lovelace",
-        }
-        mock_extractor = _make_mock_extractor(expected)
-
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        serve_extractor(mock_extractor)
-        tool_fn = await get_tool_fn(mcp, "reply_to_conversation")
-        result = await tool_fn("2-abc", "Hello!", True, mock_context)
-
-        assert result == expected
-        mock_extractor.reply_to_conversation.assert_awaited_once_with(
-            "2-abc", "Hello!", confirm_send=True
-        )
-
-    async def test_reply_to_conversation_outlives_a_stalled_notification(
-        self, mock_context, serve_extractor
-    ):
-        """A deadline in the last await would discard a confirmed reply."""
-        expected = {
-            "url": "https://www.linkedin.com/messaging/thread/2-abc/",
-            "status": "sent",
-            "sent": True,
-            "retry_safe": False,
-            "thread_id": "2-abc",
-            "participant": "Ada Lovelace",
-        }
-        calls = 0
-
-        async def stall_on_completion(**_: Any) -> None:
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                await anyio.sleep_forever()
-
-        mock_context.report_progress = stall_on_completion
-
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        serve_extractor(_make_mock_extractor(expected))
-        tool_fn = await get_tool_fn(mcp, "reply_to_conversation")
-        with anyio.fail_after(1):
-            result = await tool_fn("2-abc", "Hello!", True, mock_context)
-
-        assert calls == 2
-        assert result == expected
-
-    async def test_reply_to_conversation_is_a_write(self):
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool = await mcp.get_tool("reply_to_conversation")
-        assert tool is not None and tool.annotations is not None
-        assert not tool.annotations.read_only_hint
-        assert tool.annotations.destructive_hint is True
-        assert tool.parameters["required"] == ["thread_id", "message", "confirm_send"]
-
-    @pytest.mark.parametrize("message", ["", "tab\there"], ids=["blank", "c0"])
-    async def test_reply_to_conversation_refuses_before_a_session(
-        self, mock_context, message
-    ):
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool_fn = await get_tool_fn(mcp, "reply_to_conversation")
-        with patch(
-            "linkedin_mcp_server.tools.messaging.get_ready_extractor",
-            new_callable=AsyncMock,
-        ) as ready:
-            result = await tool_fn("2-abc", message, True, mock_context)
-
-        ready.assert_not_awaited()
-        assert result["status"] == "invalid_message"
-        assert result["retry_safe"] is True
-        assert result["url"] == "https://www.linkedin.com/messaging/thread/2-abc/"
-
-    async def test_reply_to_conversation_maps_a_bad_thread_id(self, mock_context):
-        from fastmcp.exceptions import ToolError
-
-        from linkedin_mcp_server.core.exceptions import InvalidReferenceError
-        from linkedin_mcp_server.tools.messaging import register_messaging_tools
-
-        mcp = FastMCP("test")
-        register_messaging_tools(mcp)
-
-        tool_fn = await get_tool_fn(mcp, "reply_to_conversation")
-        with (
-            patch(
-                "linkedin_mcp_server.tools.messaging.get_ready_extractor",
-                new_callable=AsyncMock,
-            ) as ready,
-            pytest.raises(ToolError) as excinfo,
-        ):
-            await tool_fn("../../feed", "", True, mock_context)
-
-        ready.assert_not_awaited()
-        assert isinstance(excinfo.value.__cause__, InvalidReferenceError)
-
 
 class TestGetMyProfileTool:
     async def test_get_my_profile_success(self, mock_context, serve_extractor):
@@ -2980,8 +2461,15 @@ class TestToolTimeouts:
             "get_conversation",
             "search_conversations",
             "archive_conversation",
-            "send_message",
-            "reply_to_conversation",
+            "save_draft",
+            "list_drafts",
+            "update_draft",
+            "add_labels",
+            "remove_labels",
+            "list_labels",
+            "set_reminder",
+            "list_reminders",
+            "complete_reminder",
             "get_feed",
             "search_posts",
             "close_session",
@@ -3016,8 +2504,15 @@ class TestToolTimeouts:
             "get_conversation",
             "search_conversations",
             "archive_conversation",
-            "send_message",
-            "reply_to_conversation",
+            "save_draft",
+            "list_drafts",
+            "update_draft",
+            "add_labels",
+            "remove_labels",
+            "list_labels",
+            "set_reminder",
+            "list_reminders",
+            "complete_reminder",
             "get_feed",
             "search_posts",
             "close_session",

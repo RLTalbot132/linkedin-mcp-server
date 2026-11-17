@@ -84,11 +84,11 @@ _THE_OWNER_IS_GONE = (
 #: server: the contract is this text, including the write-authorization rule
 #: and the user-owned verification step.
 _THE_OPERATING_RULES = """\
-send_message and connect_with_person act for the user. Use them only for the
-exact action, recipient and text the user approved; when the user asks for a
-draft, or for something these tools cannot do, reply with the text instead. If
-a write's outcome is unknown, ask the user to check LinkedIn before acting
-again.
+This server cannot send messages. To reply or write to someone, save the text
+with save_draft and tell the user to send it from LinkedIn. connect_with_person
+acts for the user: use it only for the exact recipient and note the user
+approved. If a write's outcome is unknown, ask the user to check LinkedIn
+before acting again.
 
 Report what the tools returned, and say when a result may be incomplete.
 

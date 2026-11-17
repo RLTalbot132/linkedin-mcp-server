@@ -66,8 +66,22 @@ TOOL_DELEGATES = {
     "search_jobs": "search_jobs",
     "search_people": "search_people",
     "search_posts": "search_posts",
-    "send_message": "send_message",
-    "reply_to_conversation": "reply_to_conversation",
+}
+
+#: Extractor methods this fork keeps but never serves as tools: it does not send.
+UNSERVED_FACADE_METHODS = {"send_message", "reply_to_conversation"}
+
+#: Tools that read and write the local inbox store, never a LinkedIn page.
+LOCAL_TOOLS = {
+    "save_draft",
+    "list_drafts",
+    "update_draft",
+    "add_labels",
+    "remove_labels",
+    "list_labels",
+    "set_reminder",
+    "list_reminders",
+    "complete_reminder",
 }
 
 
@@ -130,8 +144,11 @@ async def test_registered_tools_match_extractor_delegates():
 
     # The two session tools read no LinkedIn page, so neither has a delegate.
     session_tools = {"close_session", "get_session_status"}
-    assert tool_names == {*TOOL_DELEGATES, *session_tools}
-    assert set(TOOL_DELEGATES.values()) == TOOL_FACADE_METHODS
+    assert tool_names == {*TOOL_DELEGATES, *session_tools, *LOCAL_TOOLS}
+    assert not UNSERVED_FACADE_METHODS & tool_names
+    assert set(TOOL_DELEGATES.values()) == (
+        TOOL_FACADE_METHODS - UNSERVED_FACADE_METHODS
+    )
     assert not session_tools & set(TOOL_DELEGATES)
 
 

@@ -2,6 +2,25 @@
 
 <!-- mcp-name: io.github.stickerdaniel/linkedin-mcp-server -->
 
+> [!IMPORTANT]
+> **Drafts-only fork.** This fork of
+> [stickerdaniel/linkedin-mcp-server](https://github.com/stickerdaniel/linkedin-mcp-server)
+> cannot send LinkedIn messages: `send_message` and `reply_to_conversation`
+> are not registered. Replies are saved as local drafts, and you send them from
+> LinkedIn yourself. It adds local labels and follow-up reminders on
+> conversations.
+>
+> - Drafts, labels and reminders live in one SQLite file, by default
+>   `~/.linkedin-inbox/inbox.sqlite3` (set `LINKEDIN_INBOX_DB` to move it). It
+>   is readable only by your account and never leaves your machine.
+> - Reminders don't notify on their own. Ask your client "what's due?"
+>   (`list_reminders` with `due_only`), or schedule that question.
+> - `uvx mcp-server-linkedin` installs **upstream** from PyPI, which can send.
+>   Run this fork from source instead: `uv run -m linkedin_mcp_server`.
+> - `connect_with_person` (connection requests) still acts on LinkedIn.
+> - The upstream server can load optional tools from a signed remote catalog.
+>   Set `LINKEDIN_MCP_REMOTE_TOOLS=off` to keep everything local.
+
 <p align="left">
   <a href="https://pypi.org/project/mcp-server-linkedin/" target="_blank"><img src="https://img.shields.io/pypi/v/mcp-server-linkedin?color=blue" alt="PyPI"></a>
   <a href="https://github.com/stickerdaniel/linkedin-mcp-server/actions/workflows/ci.yml" target="_blank"><img src="https://github.com/stickerdaniel/linkedin-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI Status"></a>
@@ -91,8 +110,15 @@ Use code <strong>FOUNDING20</strong> for 20% off your first year. <a href="https
 | `get_conversation` | Read a conversation's messages using a LinkedIn username or thread ID. |
 | `search_conversations` | Search messages by keyword and return links to matching conversation threads. |
 | `archive_conversation` | Archive a conversation by thread ID; a repeat call reports it already archived. |
-| `send_message` | Message a profile after confirmation. Threads use `reply_to_conversation`. |
-| `reply_to_conversation` | Reply inside an existing thread or InMail by thread ID. Sends after confirmation. |
+| `save_draft` | Save a reply or new message as a local draft. Nothing is sent to LinkedIn. |
+| `list_drafts` | List local drafts, filtered by status, thread or person. |
+| `update_draft` | Edit a draft, or mark it sent (after you send it yourself) or discarded. |
+| `add_labels` | Tag a conversation with local labels such as `lead` or `recruiter`. |
+| `remove_labels` | Remove local labels from a conversation. |
+| `list_labels` | Labels for a conversation, conversations for a label, or every label in use. |
+| `set_reminder` | Set a local follow-up reminder on a conversation. |
+| `list_reminders` | List reminders, or only those due now. |
+| `complete_reminder` | Close a reminder as done or cancelled. |
 | `get_company_profile` | Read company information, with optional sections for posts and open jobs. |
 | `get_company_posts` | Read recent posts from a company's feed, with links to the original posts. |
 | `search_companies` | Find companies by keyword and return links to their LinkedIn profiles. |

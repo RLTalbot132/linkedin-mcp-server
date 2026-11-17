@@ -125,12 +125,40 @@
       "description": "Archive a LinkedIn messaging thread by thread ID, confirmed on a reload and never unarchived by a repeat call"
     },
     {
-      "name": "send_message",
-      "description": "Compose and send a new message, line breaks and empty lines included, without tab or other control characters to a LinkedIn user with explicit confirmation and optional profile URN support; profile-based targeting may create a separate DM instead of replying in an existing thread (use reply_to_conversation for that), and when no normal Message action is exposed, use connect_with_person and retry after acceptance"
+      "name": "save_draft",
+      "description": "Save a message draft locally; nothing is sent to LinkedIn"
     },
     {
-      "name": "reply_to_conversation",
-      "description": "Reply inside an existing messaging thread by thread ID, InMail included, with explicit confirmation; verifies the thread and its composer first and never clicks quick-reply buttons"
+      "name": "list_drafts",
+      "description": "List locally saved message drafts"
+    },
+    {
+      "name": "update_draft",
+      "description": "Edit a local draft, or mark it sent or discarded"
+    },
+    {
+      "name": "add_labels",
+      "description": "Tag a conversation with local labels"
+    },
+    {
+      "name": "remove_labels",
+      "description": "Remove local labels from a conversation"
+    },
+    {
+      "name": "list_labels",
+      "description": "List labels for a conversation, conversations for a label, or all labels"
+    },
+    {
+      "name": "set_reminder",
+      "description": "Set a local follow-up reminder on a conversation"
+    },
+    {
+      "name": "list_reminders",
+      "description": "List reminders, including those due now"
+    },
+    {
+      "name": "complete_reminder",
+      "description": "Close a reminder as done or cancelled"
     },
     {
       "name": "get_feed",

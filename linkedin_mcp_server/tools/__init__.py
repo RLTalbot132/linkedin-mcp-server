@@ -10,7 +10,8 @@ Available Tools:
 - Person tools: LinkedIn profile reading and analysis
 - Company tools: Company profile and information extraction
 - Job tools: Job posting details and search functionality
-- Messaging tools: Inbox, conversations, search, and sending messages
+- Messaging tools: Inbox, conversations, search, and archiving (no sending)
+- Inbox tools: Local drafts, labels and reminders (never contact LinkedIn)
 - Feed tools: Home feed reading
 - Post tools: Global post/content search
 

@@ -139,6 +139,64 @@
       "send_message"
     ],
     "tool_schemas": {
+      "add_labels": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "labels": {
+              "description": "One or more labels, up to 50 characters each.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "linkedin_username": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The participant's username, if there is no thread ID."
+            },
+            "participant": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Optional display name, shown when listing a label."
+            },
+            "thread_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The conversation's thread ID. Preferred."
+            }
+          },
+          "required": [
+            "labels"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
       "archive_conversation": {
         "input": {
           "additionalProperties": false,
@@ -162,6 +220,34 @@
         "input": {
           "additionalProperties": false,
           "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "complete_reminder": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "reminder_id": {
+              "description": "The reminder's id from set_reminder or list_reminders.",
+              "type": "integer"
+            },
+            "status": {
+              "default": "done",
+              "description": "\"done\" (default) or \"cancelled\".",
+              "enum": [
+                "done",
+                "cancelled"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "reminder_id"
+          ],
           "type": "object"
         },
         "output": {
@@ -594,27 +680,230 @@
           "type": "object"
         }
       },
-      "reply_to_conversation": {
+      "list_drafts": {
         "input": {
           "additionalProperties": false,
           "properties": {
-            "confirm_send": {
-              "description": "Must be True to send. False is a dry run that verifies\nthe thread and composer, types nothing, and says who the reply\nwould go to.",
-              "type": "boolean"
+            "limit": {
+              "default": 50,
+              "description": "Maximum drafts to return (1-200, default 50).",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
             },
-            "message": {
-              "description": "Message text, read as send_message reads it: LF, CRLF and\nCR all end a line, empty lines are kept, and the whole message\nis trimmed. Tab, other control characters, DEL, U+0085, U+2028\nand U+2029 are refused.",
+            "linkedin_username": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Only drafts for this person."
+            },
+            "status": {
+              "default": "open",
+              "description": "Which drafts to list (default \"open\"; \"any\" for all).",
+              "enum": [
+                "open",
+                "sent",
+                "discarded",
+                "any"
+              ],
               "type": "string"
             },
             "thread_id": {
-              "description": "LinkedIn messaging thread ID, or a /messaging/thread/<id>/\nreference as another tool returned it",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Only drafts for this conversation."
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "list_labels": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "A label to look up conversations by."
+            },
+            "linkedin_username": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "A participant to read labels for."
+            },
+            "thread_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "A conversation to read labels for."
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "list_reminders": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "due_only": {
+              "default": false,
+              "description": "Only reminders due now or overdue.",
+              "type": "boolean"
+            },
+            "include_closed": {
+              "default": false,
+              "description": "Include done and cancelled reminders too.",
+              "type": "boolean"
+            },
+            "limit": {
+              "default": 50,
+              "description": "Maximum reminders to return (1-200, default 50).",
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "remove_labels": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "labels": {
+              "description": "Labels to remove.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "linkedin_username": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The participant's username, as it was labeled."
+            },
+            "thread_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The conversation's thread ID, as it was labeled."
             }
           },
           "required": [
-            "thread_id",
-            "message",
-            "confirm_send"
+            "labels"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "save_draft": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "description": "The message text (up to 8000 characters; line breaks kept).",
+              "type": "string"
+            },
+            "linkedin_username": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The recipient's /in/ username or profile URL,\nfor someone with no thread yet. Give this or thread_id."
+            },
+            "recipient_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Optional display name, for listing."
+            },
+            "thread_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The conversation's thread ID from get_inbox,\nget_conversation or search_conversations. Preferred."
+            }
+          },
+          "required": [
+            "body"
           ],
           "type": "object"
         },
@@ -891,23 +1180,15 @@
           "type": "object"
         }
       },
-      "send_message": {
+      "set_reminder": {
         "input": {
           "additionalProperties": false,
           "properties": {
-            "confirm_send": {
-              "description": "Must be True to send the message",
-              "type": "boolean"
+            "due_at": {
+              "description": "When it is due, ISO 8601 with a UTC offset, e.g.\n\"2026-11-20T09:00:00-07:00\". Resolve phrases like \"next\nTuesday\" in the user's time zone before calling.",
+              "type": "string"
             },
             "linkedin_username": {
-              "description": "LinkedIn username of the recipient; a full profile URL is accepted too",
-              "type": "string"
-            },
-            "message": {
-              "description": "Message text. LF, CRLF and CR all end a line; an empty line\nseparates paragraphs and is kept. Whitespace-only lines count as\nempty, and leading and trailing whitespace of the whole message\nis removed, as LinkedIn does when sending. Tab, other control\ncharacters, DEL, U+0085, U+2028 and U+2029 are refused.",
-              "type": "string"
-            },
-            "profile_urn": {
               "anyOf": [
                 {
                   "type": "string"
@@ -917,13 +1198,83 @@
                 }
               ],
               "default": null,
-              "description": "Optional profile URN (e.g. ACoAAB...) to verify against\nthe URN exposed by the loaded profile before opening its Message\naction. It never bypasses recipient verification. Obtain via\nget_person_profile. Note: inbox may not always show all messages;\nuse search_conversations as a fallback."
+              "description": "The participant's username, if there is no thread ID."
+            },
+            "note": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "What to follow up on."
+            },
+            "thread_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "The conversation's thread ID. Preferred."
             }
           },
           "required": [
-            "linkedin_username",
-            "message",
-            "confirm_send"
+            "due_at"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "type": "object"
+        }
+      },
+      "update_draft": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "body": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "New text, replacing the old."
+            },
+            "draft_id": {
+              "description": "The draft's id from save_draft or list_drafts.",
+              "type": "integer"
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "sent",
+                    "discarded"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "\"sent\" once the user has sent it, \"discarded\" to drop it,\nor \"open\" to reopen it."
+            }
+          },
+          "required": [
+            "draft_id"
           ],
           "type": "object"
         },
